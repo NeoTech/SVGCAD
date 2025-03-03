@@ -17,6 +17,8 @@ class BaseTool {
         this.startPoint = null;
         this.currentPoint = null;
         this.statusHint = '';
+        this.dimensionInput = null;
+        this.dimensionInputActive = false;
     }
 
     /**
@@ -29,6 +31,12 @@ class BaseTool {
         this.canvasManager = canvasManager;
         this.constraintManager = constraintManager;
         this.appState = appState;
+        
+        // Initialize dimension input if not already created
+        if (!window.globalDimensionInput) {
+            window.globalDimensionInput = new DimensionInput(canvasManager);
+        }
+        this.dimensionInput = window.globalDimensionInput;
         
         logger.info(`${this.name} tool initialized`);
     }
@@ -55,6 +63,11 @@ class BaseTool {
         this.active = false;
         this.reset();
         
+        // Hide dimension input if visible
+        if (this.dimensionInput && this.dimensionInput.isVisible()) {
+            this.dimensionInput.hide();
+        }
+        
         logger.info(`${this.name} tool deactivated`);
     }
 
@@ -65,6 +78,12 @@ class BaseTool {
         this.mouseDown = false;
         this.startPoint = null;
         this.currentPoint = null;
+        this.dimensionInputActive = false;
+        
+        // Hide dimension input if visible
+        if (this.dimensionInput && this.dimensionInput.isVisible()) {
+            this.dimensionInput.hide();
+        }
         
         if (this.canvasManager) {
             this.canvasManager.clearPreview();
@@ -96,6 +115,20 @@ class BaseTool {
      */
     onMouseDown(event) {
         if (!this.active || !this.canvasManager) return;
+        
+        // If dimension input is visible, check if we clicked on it
+        if (this.dimensionInput && this.dimensionInput.isVisible()) {
+            // Check if click is inside the dimension input
+            const inputRect = this.dimensionInput.container.getBoundingClientRect();
+            if (event.clientX >= inputRect.left && event.clientX <= inputRect.right &&
+                event.clientY >= inputRect.top && event.clientY <= inputRect.bottom) {
+                // Click is inside the input, don't process further
+                return;
+            } else {
+                // Click is outside, apply the current value and hide
+                this.dimensionInput.applyValue();
+            }
+        }
         
         this.mouseDown = true;
         
@@ -139,6 +172,18 @@ class BaseTool {
                 y: this.currentPoint.y 
             };
         }
+        
+        // Update dimension input position if visible
+        if (this.dimensionInput && this.dimensionInput.isVisible()) {
+            const screenPos = {
+                x: event.clientX,
+                y: event.clientY
+            };
+            this.dimensionInput.updatePosition(screenPos);
+            
+            // Update dimension value if needed
+            this.updateDimensionInputValue();
+        }
     }
 
     /**
@@ -162,6 +207,9 @@ class BaseTool {
         this.currentPoint = new Point(constrainedPos.x, constrainedPos.y);
         
         logger.info(`${this.name} tool: Mouse up at ${this.currentPoint.toString()}`);
+        
+        // Show dimension input if appropriate
+        this.showDimensionInput(event);
     }
 
     /**
@@ -174,6 +222,12 @@ class BaseTool {
         // Handle escape key to cancel
         if (event.key === 'Escape') {
             this.cancel();
+            event.preventDefault();
+        }
+        
+        // Handle Tab key to activate dimension input
+        if (event.key === 'Tab' && !this.dimensionInputActive) {
+            this.activateDimensionInput();
             event.preventDefault();
         }
     }
@@ -211,6 +265,49 @@ class BaseTool {
         
         // Prevent default context menu
         event.preventDefault();
+    }
+    
+    /**
+     * Show dimension input
+     * @param {MouseEvent} event - The mouse event
+     */
+    showDimensionInput(event) {
+        // This method should be overridden by derived classes
+        // to show appropriate dimension inputs
+    }
+    
+    /**
+     * Update dimension input value
+     */
+    updateDimensionInputValue() {
+        // This method should be overridden by derived classes
+        // to update the dimension input value based on current state
+    }
+    
+    /**
+     * Activate dimension input
+     */
+    activateDimensionInput() {
+        // This method should be overridden by derived classes
+        // to activate the dimension input when Tab is pressed
+    }
+    
+    /**
+     * Tab between dimension inputs
+     */
+    tabDimensionInput() {
+        // This method should be overridden by derived classes
+        // to handle tabbing between multiple dimension inputs
+    }
+    
+    /**
+     * Apply dimension value
+     * @param {string} dimensionType - The type of dimension
+     * @param {number} value - The value to apply
+     */
+    applyDimensionValue(dimensionType, value) {
+        // This method should be overridden by derived classes
+        // to apply the dimension value
     }
 }
 
