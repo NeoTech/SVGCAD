@@ -322,8 +322,16 @@ class LineTool extends BaseTool {
             this.lastEndPoint = new Point(this.currentLine.x2, this.currentLine.y2);
             this.updateStatusHint();
         } else {
+            // Store the created line before resetting
+            const createdLine = this.currentLine;
+            
             // Reset for next line
             this.reset();
+            
+            // Switch to Select tool and select the newly created line
+            if (this.appState) {
+                this.appState.switchToSelectToolAndSelectShape(createdLine);
+            }
         }
     }
     

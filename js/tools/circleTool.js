@@ -290,10 +290,18 @@ class CircleTool extends BaseTool {
         // Add the circle to the canvas
         this.canvasManager.addShape(this.currentCircle);
         
-        logger.info(`Circle committed to canvas at (${this.currentCircle.centerX}, ${this.currentCircle.centerY}) with radius ${this.currentCircle.radius}`);
+        logger.info(`Circle committed to canvas at (${this.currentCircle.cx}, ${this.currentCircle.cy}) with radius ${this.currentCircle.radius}`);
+        
+        // Store the created circle before resetting
+        const createdCircle = this.currentCircle;
         
         // Reset for next circle
         this.reset();
+        
+        // Switch to Select tool and select the newly created circle
+        if (this.appState) {
+            this.appState.switchToSelectToolAndSelectShape(createdCircle);
+        }
     }
     
     /**

@@ -457,6 +457,43 @@ class AppStateManager {
         
         logger.info('SVG exported');
     }
+
+    /**
+     * Switch to the Select tool and select the specified shape
+     * @param {Object} shape - The shape to select
+     */
+    switchToSelectToolAndSelectShape(shape) {
+        // Deactivate current tool
+        if (this.activeTool) {
+            this.activeTool.deactivate();
+        }
+        
+        // Activate select tool
+        this.activeTool = this.tools['select'];
+        this.activeTool.activate();
+        
+        // Update Alpine.js data
+        if (window.appData) {
+            window.appData.activeTool = 'select';
+            window.appData.statusHint = this.activeTool.statusHint;
+        } else {
+            // If appData is not available, update our internal state
+            this.statusHint = this.activeTool.statusHint;
+        }
+        
+        // Select the shape
+        if (shape && this.canvasManager) {
+            this.canvasManager.deselectAll();
+            this.canvasManager.selectElements(shape);
+            
+            // If the select tool has a properties panel, show it
+            if (this.activeTool.propertiesPanel) {
+                this.activeTool.propertiesPanel.showProperties(shape);
+            }
+        }
+        
+        logger.info('Switched to Select tool and selected shape');
+    }
 }
 
 // Create a singleton instance

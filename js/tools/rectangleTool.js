@@ -322,8 +322,16 @@ class RectangleTool extends BaseTool {
         
         logger.info(`Rectangle committed to canvas at (${this.currentRect.x}, ${this.currentRect.y}) with width ${this.currentRect.width} and height ${this.currentRect.height}`);
         
+        // Store the created rectangle before resetting
+        const createdRect = this.currentRect;
+        
         // Reset for next rectangle
         this.reset();
+        
+        // Switch to Select tool and select the newly created rectangle
+        if (this.appState) {
+            this.appState.switchToSelectToolAndSelectShape(createdRect);
+        }
     }
     
     /**

@@ -269,10 +269,18 @@ class ArcTool extends BaseTool {
         // Add the arc to the canvas
         this.canvasManager.addShape(this.currentArc);
         
-        logger.info(`Arc committed to canvas at (${this.currentArc.centerX}, ${this.currentArc.centerY}) with radius ${this.currentArc.radius}`);
+        logger.info(`Arc committed to canvas at (${this.currentArc.cx}, ${this.currentArc.cy}) with radius ${this.currentArc.radius}`);
+        
+        // Store the created arc before resetting
+        const createdArc = this.currentArc;
         
         // Reset for next arc
         this.reset();
+        
+        // Switch to Select tool and select the newly created arc
+        if (this.appState) {
+            this.appState.switchToSelectToolAndSelectShape(createdArc);
+        }
     }
 
     /**
