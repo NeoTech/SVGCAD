@@ -284,10 +284,39 @@ class CanvasManager {
     addShape(shape) {
         if (!shape) return;
         
-        this.shapes.push(shape);
+        // Ensure the shape is an instance of its respective class
+        let shapeInstance;
+        
+        switch (shape.type) {
+            case 'line':
+                shapeInstance = new Line(shape.x1, shape.y1, shape.x2, shape.y2);
+                shapeInstance.id = shape.id || `line_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+                break;
+                
+            case 'rectangle':
+                shapeInstance = new Rectangle(shape.x, shape.y, shape.width, shape.height);
+                shapeInstance.id = shape.id || `rectangle_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+                break;
+                
+            case 'circle':
+                shapeInstance = new Circle(shape.cx, shape.cy, shape.radius);
+                shapeInstance.id = shape.id || `circle_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+                break;
+                
+            case 'arc':
+                shapeInstance = new Arc(shape.cx, shape.cy, shape.radius, shape.startAngle, shape.endAngle);
+                shapeInstance.id = shape.id || `arc_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+                break;
+                
+            default:
+                shapeInstance = shape;
+                break;
+        }
+        
+        this.shapes.push(shapeInstance);
         this.render();
         
-        logger.info(`Added ${shape.type} with ID ${shape.id}`);
+        logger.info(`Added ${shapeInstance.type} with ID ${shapeInstance.id}`);
     }
 
     /**
@@ -320,10 +349,39 @@ class CanvasManager {
         const index = this.shapes.findIndex(s => s.id === shape.id);
         
         if (index !== -1) {
-            this.shapes[index] = shape;
+            // Ensure the shape is an instance of its respective class
+            let shapeInstance;
+            
+            switch (shape.type) {
+                case 'line':
+                    shapeInstance = new Line(shape.x1, shape.y1, shape.x2, shape.y2);
+                    shapeInstance.id = shape.id;
+                    break;
+                    
+                case 'rectangle':
+                    shapeInstance = new Rectangle(shape.x, shape.y, shape.width, shape.height);
+                    shapeInstance.id = shape.id;
+                    break;
+                    
+                case 'circle':
+                    shapeInstance = new Circle(shape.cx, shape.cy, shape.radius);
+                    shapeInstance.id = shape.id;
+                    break;
+                    
+                case 'arc':
+                    shapeInstance = new Arc(shape.cx, shape.cy, shape.radius, shape.startAngle, shape.endAngle);
+                    shapeInstance.id = shape.id;
+                    break;
+                    
+                default:
+                    shapeInstance = shape;
+                    break;
+            }
+            
+            this.shapes[index] = shapeInstance;
             this.render();
             
-            logger.info(`Updated ${shape.type} with ID ${shape.id}`);
+            logger.info(`Updated ${shapeInstance.type} with ID ${shapeInstance.id}`);
         }
     }
 
@@ -337,14 +395,15 @@ class CanvasManager {
     }
 
     /**
-     * Find shapes at a specific point
+     * Find shapes at a point
      * @param {number} x - X coordinate
      * @param {number} y - Y coordinate
-     * @param {number} tolerance - Distance tolerance
+     * @param {number} tolerance - Tolerance for hit detection
      * @returns {Array} Array of shapes at the point
      */
     findShapesAtPoint(x, y, tolerance = 5) {
-        return this.shapes.filter(shape => {
+        // Find all shapes that contain the point
+        const shapesAtPoint = this.shapes.filter(shape => {
             if (shape.type === 'line') {
                 return shape.isPointOnLine(x, y, tolerance);
             } else if (shape.type === 'rectangle') {
@@ -356,6 +415,9 @@ class CanvasManager {
             }
             return false;
         });
+        
+        // Sort shapes by their ID to ensure consistent ordering
+        return shapesAtPoint.sort((a, b) => a.id.localeCompare(b.id));
     }
 
     /**
@@ -369,7 +431,8 @@ class CanvasManager {
     findShapesInRect(x, y, width, height) {
         const rect = new Rectangle(x, y, width, height);
         
-        return this.shapes.filter(shape => {
+        // Find all shapes that intersect with the rectangle
+        const shapesInRect = this.shapes.filter(shape => {
             if (shape.type === 'line') {
                 return shape.intersectsWithRect(x, y, width, height);
             } else if (shape.type === 'rectangle') {
@@ -380,6 +443,9 @@ class CanvasManager {
             }
             return false;
         });
+        
+        // Sort shapes by their ID to ensure consistent ordering
+        return shapesInRect.sort((a, b) => a.id.localeCompare(b.id));
     }
 
     /**
@@ -389,14 +455,16 @@ class CanvasManager {
     selectElements(elements) {
         if (!elements) return;
         
+        // Clear current selection first
+        this.selectedElements = [];
+        
+        // Convert to array if not already
         const elementsArray = Array.isArray(elements) ? elements : [elements];
         
-        // Add new elements to selection
-        elementsArray.forEach(element => {
-            if (!this.selectedElements.some(e => e.id === element.id)) {
-                this.selectedElements.push(element);
-            }
-        });
+        // Only select the first element in the array
+        if (elementsArray.length > 0) {
+            this.selectedElements.push(elementsArray[0]);
+        }
         
         this.renderSelection();
         
@@ -404,7 +472,10 @@ class CanvasManager {
             this.appState.selectedElements = [...this.selectedElements];
         }
         
-        logger.info(`Selected ${elementsArray.length} element(s)`);
+        // Emit selection changed event
+        this.emitEvent('selectionChanged', this.selectedElements);
+        
+        logger.info(`Selected ${this.selectedElements.length} element(s)`);
     }
 
     /**
@@ -412,7 +483,9 @@ class CanvasManager {
      * @param {string} id - The ID of the element to deselect
      */
     deselectElement(id) {
-        const index = this.selectedElements.findIndex(element => element.id === id);
+        if (!id) return;
+        
+        const index = this.selectedElements.findIndex(e => e.id === id);
         
         if (index !== -1) {
             this.selectedElements.splice(index, 1);
@@ -422,6 +495,9 @@ class CanvasManager {
                 this.appState.selectedElements = [...this.selectedElements];
             }
             
+            // Emit selection changed event
+            this.emitEvent('selectionChanged', this.selectedElements);
+            
             logger.info(`Deselected element with ID ${id}`);
         }
     }
@@ -430,12 +506,17 @@ class CanvasManager {
      * Deselect all elements
      */
     deselectAll() {
+        if (this.selectedElements.length === 0) return;
+        
         this.selectedElements = [];
         this.renderSelection();
         
         if (this.appState) {
             this.appState.selectedElements = [];
         }
+        
+        // Emit selection cleared event
+        this.emitEvent('selectionCleared');
         
         logger.info('Deselected all elements');
     }
@@ -716,6 +797,79 @@ class CanvasManager {
         this.render();
         
         logger.info('All shapes cleared');
+    }
+
+    /**
+     * Preview an updated shape without committing the changes
+     * @param {Object} updatedShape - The updated shape to preview
+     */
+    previewUpdatedShape(updatedShape) {
+        if (!updatedShape) return;
+        
+        // Clear any existing preview
+        this.clearPreview();
+        
+        // Create a preview element based on the shape type
+        let previewElement;
+        
+        switch (updatedShape.type) {
+            case 'line':
+                previewElement = new Line(
+                    updatedShape.x1,
+                    updatedShape.y1,
+                    updatedShape.x2,
+                    updatedShape.y2
+                );
+                break;
+                
+            case 'rectangle':
+                previewElement = new Rectangle(
+                    updatedShape.x,
+                    updatedShape.y,
+                    updatedShape.width,
+                    updatedShape.height
+                );
+                break;
+                
+            case 'circle':
+                previewElement = new Circle(
+                    updatedShape.cx,
+                    updatedShape.cy,
+                    updatedShape.radius
+                );
+                break;
+                
+            case 'arc':
+                previewElement = new Arc(
+                    updatedShape.cx,
+                    updatedShape.cy,
+                    updatedShape.radius,
+                    updatedShape.startAngle,
+                    updatedShape.endAngle
+                );
+                break;
+                
+            default:
+                return;
+        }
+        
+        // Set the preview element
+        this.setPreviewElement(previewElement);
+    }
+
+    /**
+     * Emit an event
+     * @param {string} event - The event name
+     * @param {Object} data - The event data
+     */
+    emitEvent(event, data) {
+        // Notify active tool
+        if (this.appState && this.appState.activeTool) {
+            const tool = this.appState.activeTool;
+            if (typeof tool.handleCanvasManagerEvent === 'function') {
+                tool.handleCanvasManagerEvent(event, data);
+            }
+        }
     }
 }
 

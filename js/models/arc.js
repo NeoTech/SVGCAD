@@ -214,10 +214,20 @@ class Arc {
 
     /**
      * Get the length of this Arc
-     * @returns {number} The length
+     * @returns {number} The arc length
      */
-    getLength() {
-        return this.radius * this.getAngleSpan();
+    getArcLength() {
+        // Ensure end angle is greater than start angle
+        let adjustedEndAngle = this.endAngle;
+        if (adjustedEndAngle < this.startAngle) {
+            adjustedEndAngle += Math.PI * 2;
+        }
+        
+        // Calculate the angle in radians
+        const angleRadians = adjustedEndAngle - this.startAngle;
+        
+        // Calculate the arc length
+        return this.radius * angleRadians;
     }
 
     /**

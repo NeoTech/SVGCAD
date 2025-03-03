@@ -11,11 +11,14 @@ class ArcTool extends BaseTool {
         this.previewArc = null;
         this.previewCircle = null;
         this.centerPoint = null;
-        this.radiusPoint = null;
-        this.startAnglePoint = null;
-        this.endAnglePoint = null;
-        this.drawStage = 0; // 0: center, 1: radius, 2: start angle, 3: end angle
         this.radius = 0;
+        this.startAngle = 0;
+        this.endAngle = 0;
+        this.originalRadius = 0;
+        this.originalStartAngle = 0;
+        this.originalEndAngle = 0;
+        this.currentArc = null;
+        this.dimensionInputActive = false;
     }
 
     /**
@@ -31,17 +34,7 @@ class ArcTool extends BaseTool {
      */
     deactivate() {
         super.deactivate();
-        this.previewArc = null;
-        this.previewCircle = null;
-        this.centerPoint = null;
-        this.radiusPoint = null;
-        this.startAnglePoint = null;
-        this.endAnglePoint = null;
-        this.drawStage = 0;
-        this.radius = 0;
-        if (this.canvasManager) {
-            this.canvasManager.clearPreview();
-        }
+        this.reset();
     }
 
     /**
@@ -52,11 +45,14 @@ class ArcTool extends BaseTool {
         this.previewArc = null;
         this.previewCircle = null;
         this.centerPoint = null;
-        this.radiusPoint = null;
-        this.startAnglePoint = null;
-        this.endAnglePoint = null;
-        this.drawStage = 0;
         this.radius = 0;
+        this.startAngle = 0;
+        this.endAngle = 0;
+        this.originalRadius = 0;
+        this.originalStartAngle = 0;
+        this.originalEndAngle = 0;
+        this.currentArc = null;
+        this.dimensionInputActive = false;
         if (this.canvasManager) {
             this.canvasManager.clearPreview();
         }
@@ -66,21 +62,7 @@ class ArcTool extends BaseTool {
      * Update the status hint
      */
     updateStatusHint() {
-        switch (this.drawStage) {
-            case 0:
-                this.statusHint = 'Arc: Click to set center point';
-                break;
-            case 1:
-                this.statusHint = 'Arc: Click and drag to set radius';
-                break;
-            case 2:
-                this.statusHint = 'Arc: Click on circle to set start angle';
-                break;
-            case 3:
-                this.statusHint = 'Arc: Click on circle to set end angle and complete arc';
-                break;
-        }
-        
+        this.statusHint = 'Arc: Click to set center point or press Tab for precise input';
         if (this.appState) {
             this.appState.statusHint = this.statusHint;
         }
@@ -93,84 +75,31 @@ class ArcTool extends BaseTool {
     onMouseDown(event) {
         if (!this.active || !this.canvasManager) return;
         
-        // Get mouse position in world coordinates
+        // Call the parent method to handle dimension input clicks
+        super.onMouseDown(event);
+        if (this.dimensionInputActive) {
+            return;
+        }
+        
         const rect = this.canvasManager.canvasOverlay.getBoundingClientRect();
         const screenX = event.clientX - rect.left;
         const screenY = event.clientY - rect.top;
         const worldPos = this.canvasManager.screenToWorld(screenX, screenY);
-        
-        // Apply constraints
         const constrainedPos = this.constraintManager.applyConstraints(worldPos.x, worldPos.y);
         
-        // Process based on current draw stage
-        switch (this.drawStage) {
-            case 0: // Set center point
-                this.centerPoint = new Point(constrainedPos.x, constrainedPos.y);
-                this.mouseDown = true;
-                
-                // Create a preview circle with zero radius for immediate feedback
-                this.previewCircle = new Circle(
-                    this.centerPoint.x,
-                    this.centerPoint.y,
-                    0
-                );
-                
-                this.canvasManager.setPreviewElement(this.previewCircle);
-                this.drawStage = 1;
-                
-                logger.info(`Arc tool: Center point set at ${this.centerPoint.toString()}`);
-                break;
-                
-            case 1: // Start setting radius
-                // This is now handled in onMouseMove and onMouseUp
-                break;
-                
-            case 2: // Set start angle
-                // Calculate the vector from center to clicked point
-                const dx = constrainedPos.x - this.centerPoint.x;
-                const dy = constrainedPos.y - this.centerPoint.y;
-                
-                // Project the clicked point onto the circle
-                const angle = Math.atan2(dy, dx);
-                const projectedX = this.centerPoint.x + this.radius * Math.cos(angle);
-                const projectedY = this.centerPoint.y + this.radius * Math.sin(angle);
-                
-                this.startAnglePoint = new Point(projectedX, projectedY);
-                
-                this.drawStage = 3;
-                
-                // Update the preview immediately
-                this.updatePreview();
-                
-                logger.info(`Arc tool: Start angle set to ${angle * 180 / Math.PI} degrees`);
-                break;
-                
-            case 3: // Set end angle and create arc
-                // Calculate the vector from center to clicked point
-                const dxEnd = constrainedPos.x - this.centerPoint.x;
-                const dyEnd = constrainedPos.y - this.centerPoint.y;
-                
-                // Project the clicked point onto the circle
-                const angleEnd = Math.atan2(dyEnd, dxEnd);
-                const projectedXEnd = this.centerPoint.x + this.radius * Math.cos(angleEnd);
-                const projectedYEnd = this.centerPoint.y + this.radius * Math.sin(angleEnd);
-                
-                this.endAnglePoint = new Point(projectedXEnd, projectedYEnd);
-                
-                // Store a message before creating the arc and resetting
-                const message = "Arc tool: End angle set";
-                
-                // Create the arc
-                this.createArc();
-                
-                // Reset for next arc
-                this.reset();
-                
-                logger.info(message);
-                break;
-        }
+        this.centerPoint = new Point(constrainedPos.x, constrainedPos.y);
+        this.mouseDown = true;
         
-        this.updateStatusHint();
+        // Create a preview circle with zero radius
+        this.previewCircle = new Circle(
+            this.centerPoint.x,
+            this.centerPoint.y,
+            0
+        );
+        
+        this.canvasManager.setPreviewElement(this.previewCircle);
+        
+        logger.info(`Arc tool: Center point set at ${this.centerPoint.toString()}`);
     }
 
     /**
@@ -180,13 +109,13 @@ class ArcTool extends BaseTool {
     onMouseMove(event) {
         if (!this.active || !this.canvasManager) return;
         
-        // Get mouse position in world coordinates
+        // Call the parent method to handle dimension input position updates
+        super.onMouseMove(event);
+        
         const rect = this.canvasManager.canvasOverlay.getBoundingClientRect();
         const screenX = event.clientX - rect.left;
         const screenY = event.clientY - rect.top;
         const worldPos = this.canvasManager.screenToWorld(screenX, screenY);
-        
-        // Apply constraints
         const constrainedPos = this.constraintManager.applyConstraints(worldPos.x, worldPos.y);
         
         this.currentPoint = new Point(constrainedPos.x, constrainedPos.y);
@@ -199,8 +128,10 @@ class ArcTool extends BaseTool {
             };
         }
         
-        // Update preview based on current draw stage
-        this.updatePreview();
+        // Update preview circle if we're drawing
+        if (this.mouseDown && this.previewCircle && this.centerPoint) {
+            this.updatePreviewCircle();
+        }
     }
 
     /**
@@ -208,42 +139,40 @@ class ArcTool extends BaseTool {
      * @param {MouseEvent} event - The mouse event
      */
     onMouseUp(event) {
-        if (!this.active || !this.canvasManager) return;
+        if (!this.active || !this.mouseDown || !this.canvasManager) return;
         
-        // Only process mouse up for radius setting (stage 1)
-        if (this.drawStage === 1 && this.mouseDown) {
-            this.mouseDown = false;
-            
-            // Get mouse position in world coordinates
-            const rect = this.canvasManager.canvasOverlay.getBoundingClientRect();
-            const screenX = event.clientX - rect.left;
-            const screenY = event.clientY - rect.top;
-            const worldPos = this.canvasManager.screenToWorld(screenX, screenY);
-            
-            // Apply constraints
-            const constrainedPos = this.constraintManager.applyConstraints(worldPos.x, worldPos.y);
-            
-            this.radiusPoint = new Point(constrainedPos.x, constrainedPos.y);
-            this.radius = this.centerPoint.distanceTo(this.radiusPoint);
-            
-            // Check if the radius is too small
-            if (this.radius < 0.001) {
-                logger.warn('Arc tool: Radius too small, please try again');
-                this.reset();
-                this.updateStatusHint();
-                return;
-            }
-            
-            // Keep the preview circle visible
-            this.previewCircle.radius = this.radius;
-            this.drawStage = 2;
-            
-            // Update the preview immediately
-            this.updatePreview();
-            
-            logger.info(`Arc tool: Radius set to ${this.radius}`);
+        this.mouseDown = false;
+        
+        const rect = this.canvasManager.canvasOverlay.getBoundingClientRect();
+        const screenX = event.clientX - rect.left;
+        const screenY = event.clientY - rect.top;
+        const worldPos = this.canvasManager.screenToWorld(screenX, screenY);
+        const constrainedPos = this.constraintManager.applyConstraints(worldPos.x, worldPos.y);
+        
+        const radiusPoint = new Point(constrainedPos.x, constrainedPos.y);
+        
+        // Calculate radius
+        this.radius = this.centerPoint.distanceTo(radiusPoint);
+        
+        // Check if the arc has zero radius
+        if (this.radius < 0.001) {
+            logger.warn('Arc tool: Cannot create zero-radius arc');
+            this.reset();
             this.updateStatusHint();
+            return;
         }
+        
+        // Set default angles
+        this.startAngle = 0;
+        this.endAngle = 90;
+        
+        // Create the arc preview but don't add it to the canvas yet
+        this.createArcPreview();
+        
+        // Show dimension input
+        this.showDimensionInput(event);
+        
+        logger.info(`Arc tool: Radius set to ${this.radius}`);
     }
 
     /**
@@ -253,12 +182,317 @@ class ArcTool extends BaseTool {
     onKeyDown(event) {
         if (!this.active) return;
         
-        // Handle escape key to cancel
+        // Call the parent method to handle common key events
+        super.onKeyDown(event);
+        
         if (event.key === 'Escape') {
             this.cancel();
             event.preventDefault();
             return;
         }
+        
+        if (event.key === 'Tab' && !this.dimensionInputActive) {
+            // Create a default center point if none exists
+            if (!this.centerPoint) {
+                this.centerPoint = new Point(0, 0);
+                this.radius = 10;
+                this.startAngle = 0;
+                this.endAngle = 90;
+                this.createArcPreview();
+            }
+            
+            // Show dimension input at a default position
+            const defaultEvent = {
+                clientX: window.innerWidth / 2,
+                clientY: window.innerHeight / 2
+            };
+            this.showDimensionInput(defaultEvent);
+            event.preventDefault();
+        }
+    }
+
+    /**
+     * Update the preview circle
+     */
+    updatePreviewCircle() {
+        if (!this.centerPoint || !this.currentPoint || !this.previewCircle) return;
+        
+        // Calculate radius based on distance from center to current point
+        this.radius = this.centerPoint.distanceTo(this.currentPoint);
+        
+        // Update preview circle
+        this.previewCircle.centerX = this.centerPoint.x;
+        this.previewCircle.centerY = this.centerPoint.y;
+        this.previewCircle.radius = this.radius;
+        
+        this.canvasManager.setPreviewElement(this.previewCircle);
+    }
+
+    /**
+     * Create an arc preview
+     */
+    createArcPreview() {
+        if (!this.canvasManager || !this.centerPoint) return;
+        
+        // Check if the arc has zero radius
+        if (this.radius < 0.001) {
+            logger.warn('Arc tool: Cannot create zero-radius arc');
+            return;
+        }
+        
+        // Convert angles to radians
+        const startAngleRad = this.startAngle * (Math.PI / 180);
+        const endAngleRad = this.endAngle * (Math.PI / 180);
+        
+        // Create the arc but don't add it to the canvas yet
+        this.currentArc = new Arc(
+            this.centerPoint.x,
+            this.centerPoint.y,
+            this.radius,
+            startAngleRad,
+            endAngleRad
+        );
+        
+        // Set as preview
+        this.previewArc = this.currentArc;
+        this.canvasManager.setPreviewElement(this.previewArc);
+        
+        logger.info(`Arc preview created at (${this.centerPoint.x}, ${this.centerPoint.y}) with radius ${this.radius}`);
+    }
+    
+    /**
+     * Commit the current arc to the canvas
+     */
+    commitArc() {
+        if (!this.canvasManager || !this.currentArc) return;
+        
+        // Add the arc to the canvas
+        this.canvasManager.addShape(this.currentArc);
+        
+        logger.info(`Arc committed to canvas at (${this.currentArc.centerX}, ${this.currentArc.centerY}) with radius ${this.currentArc.radius}`);
+        
+        // Reset for next arc
+        this.reset();
+    }
+
+    /**
+     * Show dimension input
+     * @param {MouseEvent} event - The mouse event
+     */
+    showDimensionInput(event) {
+        // Store original values for preview
+        this.originalRadius = this.radius;
+        this.originalStartAngle = this.startAngle;
+        this.originalEndAngle = this.endAngle;
+        
+        // Create a custom container for arc input
+        const container = document.createElement('div');
+        container.className = 'dimension-input-container arc-dimensions';
+        container.style.position = 'absolute';
+        container.style.left = `${event.clientX + 20}px`;
+        container.style.top = `${event.clientY - 10}px`;
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.gap = '5px';
+        container.style.padding = '10px';
+        container.style.backgroundColor = '#f0f0f0';
+        container.style.border = '1px solid #ccc';
+        container.style.borderRadius = '4px';
+        container.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+        container.style.zIndex = '1000';
+        
+        // Radius input
+        const radiusContainer = document.createElement('div');
+        radiusContainer.style.display = 'flex';
+        radiusContainer.style.alignItems = 'center';
+        
+        const radiusLabel = document.createElement('label');
+        radiusLabel.textContent = 'Radius:';
+        radiusLabel.style.marginRight = '5px';
+        radiusLabel.style.minWidth = '80px';
+        
+        const radiusInput = document.createElement('input');
+        radiusInput.type = 'number';
+        radiusInput.step = '0.1';
+        radiusInput.value = this.radius.toFixed(2);
+        radiusInput.style.width = '80px';
+        
+        radiusContainer.appendChild(radiusLabel);
+        radiusContainer.appendChild(radiusInput);
+        
+        // Start angle input
+        const startAngleContainer = document.createElement('div');
+        startAngleContainer.style.display = 'flex';
+        startAngleContainer.style.alignItems = 'center';
+        
+        const startAngleLabel = document.createElement('label');
+        startAngleLabel.textContent = 'Start Angle:';
+        startAngleLabel.style.marginRight = '5px';
+        startAngleLabel.style.minWidth = '80px';
+        
+        const startAngleInput = document.createElement('input');
+        startAngleInput.type = 'number';
+        startAngleInput.step = '1';
+        startAngleInput.value = this.startAngle.toFixed(0);
+        startAngleInput.style.width = '80px';
+        
+        startAngleContainer.appendChild(startAngleLabel);
+        startAngleContainer.appendChild(startAngleInput);
+        
+        // End angle input
+        const endAngleContainer = document.createElement('div');
+        endAngleContainer.style.display = 'flex';
+        endAngleContainer.style.alignItems = 'center';
+        
+        const endAngleLabel = document.createElement('label');
+        endAngleLabel.textContent = 'End Angle:';
+        endAngleLabel.style.marginRight = '5px';
+        endAngleLabel.style.minWidth = '80px';
+        
+        const endAngleInput = document.createElement('input');
+        endAngleInput.type = 'number';
+        endAngleInput.step = '1';
+        endAngleInput.value = this.endAngle.toFixed(0);
+        endAngleInput.style.width = '80px';
+        
+        endAngleContainer.appendChild(endAngleLabel);
+        endAngleContainer.appendChild(endAngleInput);
+        
+        // Button container
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.justifyContent = 'flex-end';
+        buttonContainer.style.marginTop = '5px';
+        
+        const applyButton = document.createElement('button');
+        applyButton.textContent = 'OK';
+        applyButton.style.padding = '5px 10px';
+        applyButton.style.backgroundColor = '#4CAF50';
+        applyButton.style.color = 'white';
+        applyButton.style.border = 'none';
+        applyButton.style.borderRadius = '3px';
+        applyButton.style.cursor = 'pointer';
+        
+        buttonContainer.appendChild(applyButton);
+        
+        // Add all elements to container
+        container.appendChild(radiusContainer);
+        container.appendChild(startAngleContainer);
+        container.appendChild(endAngleContainer);
+        container.appendChild(buttonContainer);
+        
+        // Add to document
+        document.body.appendChild(container);
+        
+        // Focus radius input
+        radiusInput.focus();
+        radiusInput.select();
+        
+        // Handle input events for real-time preview
+        const updatePreview = () => {
+            const radius = parseFloat(radiusInput.value);
+            const startAngle = parseFloat(startAngleInput.value);
+            const endAngle = parseFloat(endAngleInput.value);
+            
+            if (!isNaN(radius) && radius > 0 && 
+                !isNaN(startAngle) && !isNaN(endAngle)) {
+                this.previewDimensions(radius, startAngle, endAngle);
+            }
+        };
+        
+        let inputTimeout;
+        const handleInput = () => {
+            if (inputTimeout) clearTimeout(inputTimeout);
+            inputTimeout = setTimeout(updatePreview, 50);
+        };
+        
+        radiusInput.addEventListener('input', handleInput);
+        startAngleInput.addEventListener('input', handleInput);
+        endAngleInput.addEventListener('input', handleInput);
+        
+        // Handle key events
+        const handleKeyDown = (event) => {
+            if (event.key === 'Enter') {
+                applyChanges();
+                event.preventDefault();
+            } else if (event.key === 'Escape') {
+                cancelChanges();
+                event.preventDefault();
+            }
+        };
+        
+        radiusInput.addEventListener('keydown', handleKeyDown);
+        startAngleInput.addEventListener('keydown', handleKeyDown);
+        endAngleInput.addEventListener('keydown', handleKeyDown);
+        
+        // Apply changes
+        const applyChanges = () => {
+            const radius = parseFloat(radiusInput.value);
+            const startAngle = parseFloat(startAngleInput.value);
+            const endAngle = parseFloat(endAngleInput.value);
+            
+            if (!isNaN(radius) && radius > 0 && 
+                !isNaN(startAngle) && !isNaN(endAngle)) {
+                // Update the current arc with new values
+                if (this.currentArc) {
+                    this.radius = radius;
+                    this.startAngle = startAngle;
+                    this.endAngle = endAngle;
+                    
+                    // Create a new arc with updated values
+                    this.createArcPreview();
+                    
+                    // Commit the arc to the canvas
+                    this.commitArc();
+                }
+            }
+            
+            // Remove the custom container
+            document.body.removeChild(container);
+            this.dimensionInputActive = false;
+        };
+        
+        // Cancel changes
+        const cancelChanges = () => {
+            // Reset to original values
+            this.radius = this.originalRadius;
+            this.startAngle = this.originalStartAngle;
+            this.endAngle = this.originalEndAngle;
+            
+            if (this.previewArc) {
+                this.createArcPreview();
+            }
+            
+            // Remove the custom container
+            document.body.removeChild(container);
+            this.dimensionInputActive = false;
+            
+            // Reset the tool
+            this.reset();
+        };
+        
+        // Apply button click
+        applyButton.addEventListener('click', applyChanges);
+        
+        // Set dimension input as active
+        this.dimensionInputActive = true;
+    }
+    
+    /**
+     * Preview dimension changes in real-time
+     * @param {number} radius - The new radius value
+     * @param {number} startAngle - The new start angle value
+     * @param {number} endAngle - The new end angle value
+     */
+    previewDimensions(radius, startAngle, endAngle) {
+        if (!this.centerPoint) return;
+        
+        this.radius = radius;
+        this.startAngle = startAngle;
+        this.endAngle = endAngle;
+        
+        // Create a new arc preview with updated dimensions
+        this.createArcPreview();
     }
 
     /**
@@ -269,292 +503,6 @@ class ArcTool extends BaseTool {
         this.reset();
         this.updateStatusHint();
         logger.info('Arc tool: Operation cancelled');
-    }
-
-    /**
-     * Update the preview
-     */
-    updatePreview() {
-        if (!this.canvasManager) {
-            console.error("Canvas manager not available for preview");
-            return;
-        }
-        
-        // Create a preview group element
-        const previewGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        
-        try {
-            switch (this.drawStage) {
-                case 0: // No preview yet
-                    break;
-                    
-                case 1: // Updating radius - show circle
-                    if (this.centerPoint && this.currentPoint) {
-                        const radius = this.centerPoint.distanceTo(this.currentPoint);
-                        
-                        // Create circle element
-                        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                        circle.setAttribute('cx', this.centerPoint.x);
-                        circle.setAttribute('cy', this.centerPoint.y);
-                        circle.setAttribute('r', radius);
-                        circle.setAttribute('stroke', '#0000ff');
-                        circle.setAttribute('stroke-width', 1.5);
-                        circle.setAttribute('fill', 'none');
-                        previewGroup.appendChild(circle);
-                        
-                        // Create center point dot
-                        const centerDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                        centerDot.setAttribute('cx', this.centerPoint.x);
-                        centerDot.setAttribute('cy', this.centerPoint.y);
-                        centerDot.setAttribute('r', 3 / this.canvasManager.zoom);
-                        centerDot.setAttribute('fill', '#0000ff');
-                        previewGroup.appendChild(centerDot);
-                        
-                        // Set the preview
-                        this.canvasManager.previewGroup.innerHTML = '';
-                        this.canvasManager.previewGroup.appendChild(previewGroup);
-                    }
-                    break;
-                    
-                case 2: // Showing circle and potential start point
-                    if (this.centerPoint && this.radius > 0 && this.currentPoint) {
-                        // Calculate angle from center to current point
-                        const dx = this.currentPoint.x - this.centerPoint.x;
-                        const dy = this.currentPoint.y - this.centerPoint.y;
-                        const angle = Math.atan2(dy, dx);
-                        
-                        // Project point onto circle
-                        const projectedX = this.centerPoint.x + this.radius * Math.cos(angle);
-                        const projectedY = this.centerPoint.y + this.radius * Math.sin(angle);
-                        
-                        // Create circle element
-                        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                        circle.setAttribute('cx', this.centerPoint.x);
-                        circle.setAttribute('cy', this.centerPoint.y);
-                        circle.setAttribute('r', this.radius);
-                        circle.setAttribute('stroke', '#0000ff');
-                        circle.setAttribute('stroke-width', 1.5);
-                        circle.setAttribute('fill', 'none');
-                        previewGroup.appendChild(circle);
-                        
-                        // Create center point dot
-                        const centerDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                        centerDot.setAttribute('cx', this.centerPoint.x);
-                        centerDot.setAttribute('cy', this.centerPoint.y);
-                        centerDot.setAttribute('r', 3 / this.canvasManager.zoom);
-                        centerDot.setAttribute('fill', '#0000ff');
-                        previewGroup.appendChild(centerDot);
-                        
-                        // Create line from center to projected point
-                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                        line.setAttribute('x1', this.centerPoint.x);
-                        line.setAttribute('y1', this.centerPoint.y);
-                        line.setAttribute('x2', projectedX);
-                        line.setAttribute('y2', projectedY);
-                        line.setAttribute('stroke', '#ff0000');
-                        line.setAttribute('stroke-width', 1);
-                        line.setAttribute('stroke-dasharray', '3,3');
-                        previewGroup.appendChild(line);
-                        
-                        // Create potential start point dot
-                        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                        dot.setAttribute('cx', projectedX);
-                        dot.setAttribute('cy', projectedY);
-                        dot.setAttribute('r', 4 / this.canvasManager.zoom);
-                        dot.setAttribute('fill', '#ff0000');
-                        previewGroup.appendChild(dot);
-                        
-                        // Set the preview
-                        this.canvasManager.previewGroup.innerHTML = '';
-                        this.canvasManager.previewGroup.appendChild(previewGroup);
-                    }
-                    break;
-                    
-                case 3: // Showing arc preview with start and end points
-                    if (this.centerPoint && this.startAnglePoint && this.currentPoint) {
-                        // Calculate start angle
-                        const startAngle = Math.atan2(
-                            this.startAnglePoint.y - this.centerPoint.y,
-                            this.startAnglePoint.x - this.centerPoint.x
-                        );
-                        
-                        // Calculate current angle from center to current point
-                        const dx = this.currentPoint.x - this.centerPoint.x;
-                        const dy = this.currentPoint.y - this.centerPoint.y;
-                        const currentAngle = Math.atan2(dy, dx);
-                        
-                        // Project current point onto circle for end angle
-                        const projectedX = this.centerPoint.x + this.radius * Math.cos(currentAngle);
-                        const projectedY = this.centerPoint.y + this.radius * Math.sin(currentAngle);
-                        
-                        // Ensure the arc is drawn in the correct direction
-                        let endAngle = currentAngle;
-                        if (endAngle < startAngle) {
-                            endAngle += Math.PI * 2;
-                        }
-                        
-                        // Create full circle (dashed)
-                        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                        circle.setAttribute('cx', this.centerPoint.x);
-                        circle.setAttribute('cy', this.centerPoint.y);
-                        circle.setAttribute('r', this.radius);
-                        circle.setAttribute('stroke', '#0000ff');
-                        circle.setAttribute('stroke-width', 1);
-                        circle.setAttribute('stroke-dasharray', '3,3');
-                        circle.setAttribute('fill', 'none');
-                        previewGroup.appendChild(circle);
-                        
-                        // Create center point dot
-                        const centerDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                        centerDot.setAttribute('cx', this.centerPoint.x);
-                        centerDot.setAttribute('cy', this.centerPoint.y);
-                        centerDot.setAttribute('r', 3 / this.canvasManager.zoom);
-                        centerDot.setAttribute('fill', '#0000ff');
-                        previewGroup.appendChild(centerDot);
-                        
-                        // Create line from center to start point
-                        const startLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                        startLine.setAttribute('x1', this.centerPoint.x);
-                        startLine.setAttribute('y1', this.centerPoint.y);
-                        startLine.setAttribute('x2', this.startAnglePoint.x);
-                        startLine.setAttribute('y2', this.startAnglePoint.y);
-                        startLine.setAttribute('stroke', '#ff0000');
-                        startLine.setAttribute('stroke-width', 1);
-                        startLine.setAttribute('stroke-dasharray', '3,3');
-                        previewGroup.appendChild(startLine);
-                        
-                        // Create start point dot
-                        const startDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                        startDot.setAttribute('cx', this.startAnglePoint.x);
-                        startDot.setAttribute('cy', this.startAnglePoint.y);
-                        startDot.setAttribute('r', 4 / this.canvasManager.zoom);
-                        startDot.setAttribute('fill', '#ff0000');
-                        previewGroup.appendChild(startDot);
-                        
-                        // Create line from center to current point
-                        const endLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                        endLine.setAttribute('x1', this.centerPoint.x);
-                        endLine.setAttribute('y1', this.centerPoint.y);
-                        endLine.setAttribute('x2', projectedX);
-                        endLine.setAttribute('y2', projectedY);
-                        endLine.setAttribute('stroke', '#0000ff');
-                        endLine.setAttribute('stroke-width', 1);
-                        endLine.setAttribute('stroke-dasharray', '3,3');
-                        previewGroup.appendChild(endLine);
-                        
-                        // Create current end point dot
-                        const endDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                        endDot.setAttribute('cx', projectedX);
-                        endDot.setAttribute('cy', projectedY);
-                        endDot.setAttribute('r', 4 / this.canvasManager.zoom);
-                        endDot.setAttribute('fill', '#0000ff');
-                        previewGroup.appendChild(endDot);
-                        
-                        // Create arc preview
-                        const arcPath = this.createArcPath(
-                            this.centerPoint.x,
-                            this.centerPoint.y,
-                            this.radius,
-                            startAngle,
-                            endAngle
-                        );
-                        const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                        arc.setAttribute('d', arcPath);
-                        arc.setAttribute('stroke', '#0000ff');
-                        arc.setAttribute('stroke-width', 2);
-                        arc.setAttribute('fill', 'none');
-                        previewGroup.appendChild(arc);
-                        
-                        // Set the preview
-                        this.canvasManager.previewGroup.innerHTML = '';
-                        this.canvasManager.previewGroup.appendChild(previewGroup);
-                    }
-                    break;
-            }
-        } catch (error) {
-            console.error("Error in updatePreview:", error);
-        }
-    }
-    
-    /**
-     * Create an SVG arc path
-     * @param {number} cx - Center X
-     * @param {number} cy - Center Y
-     * @param {number} r - Radius
-     * @param {number} startAngle - Start angle in radians
-     * @param {number} endAngle - End angle in radians
-     * @returns {string} - SVG path data
-     */
-    createArcPath(cx, cy, r, startAngle, endAngle) {
-        // Calculate start and end points
-        const startX = cx + r * Math.cos(startAngle);
-        const startY = cy + r * Math.sin(startAngle);
-        const endX = cx + r * Math.cos(endAngle);
-        const endY = cy + r * Math.sin(endAngle);
-        
-        // Determine if the arc is larger than 180 degrees
-        const largeArcFlag = endAngle - startAngle <= Math.PI ? 0 : 1;
-        
-        // Create the SVG path
-        return `M ${startX} ${startY} A ${r} ${r} 0 ${largeArcFlag} 1 ${endX} ${endY}`;
-    }
-
-    /**
-     * Create an arc
-     */
-    createArc() {
-        if (!this.canvasManager || !this.centerPoint || !this.startAnglePoint || !this.endAnglePoint) {
-            logger.error('Arc tool: Missing required points for arc creation');
-            return;
-        }
-        
-        const startAngle = Math.atan2(
-            this.startAnglePoint.y - this.centerPoint.y,
-            this.startAnglePoint.x - this.centerPoint.x
-        );
-        
-        const endAngle = Math.atan2(
-            this.endAnglePoint.y - this.centerPoint.y,
-            this.endAnglePoint.x - this.centerPoint.x
-        );
-        
-        // Ensure the arc is drawn in the correct direction
-        let adjustedEndAngle = endAngle;
-        if (endAngle < startAngle) {
-            adjustedEndAngle += Math.PI * 2;
-        }
-        
-        // Check if the arc has zero radius
-        if (this.radius < 0.001) {
-            logger.warn('Arc tool: Cannot create zero-radius arc');
-            return;
-        }
-        
-        // Check if start and end angles are the same (or very close)
-        if (Math.abs(adjustedEndAngle - startAngle) < 0.001 || 
-            Math.abs(adjustedEndAngle - startAngle - Math.PI * 2) < 0.001) {
-            logger.warn('Arc tool: Start and end angles are the same');
-            return;
-        }
-        
-        try {
-            // Create the arc
-            const arc = new Arc(
-                this.centerPoint.x,
-                this.centerPoint.y,
-                this.radius,
-                startAngle,
-                adjustedEndAngle
-            );
-            
-            // Add the arc to the canvas
-            this.canvasManager.addShape(arc);
-            
-            logger.info(`Arc created at (${this.centerPoint.x}, ${this.centerPoint.y}) with radius ${this.radius}, ` +
-                       `start angle ${startAngle * 180 / Math.PI}° and end angle ${adjustedEndAngle * 180 / Math.PI}°`);
-        } catch (error) {
-            logger.error(`Arc tool: Error creating arc: ${error.message}`);
-        }
     }
 }
 

@@ -16,6 +16,21 @@ class SelectTool extends BaseTool {
         this.dragMode = 'move'; // 'move', 'resize', 'rotate'
         this.resizeHandle = null;
         this.rotateCenter = null;
+        this.propertiesPanel = null;
+    }
+
+    /**
+     * Initialize the tool
+     * @param {CanvasManager} canvasManager - The canvas manager
+     * @param {AppStateManager} appState - The application state manager
+     */
+    init(canvasManager, appState) {
+        super.init(canvasManager, appState);
+        
+        // Initialize properties panel
+        if (!this.propertiesPanel && this.canvasManager) {
+            this.propertiesPanel = new PropertiesPanel(this.canvasManager);
+        }
     }
 
     /**
@@ -24,6 +39,11 @@ class SelectTool extends BaseTool {
     activate() {
         super.activate();
         this.updateStatusHint();
+        
+        // Initialize properties panel if not already created
+        if (!this.propertiesPanel && this.canvasManager) {
+            this.propertiesPanel = new PropertiesPanel(this.canvasManager);
+        }
     }
 
     /**
@@ -34,6 +54,11 @@ class SelectTool extends BaseTool {
         this.selectedShapes = [];
         this.selectionRect = null;
         this.dragging = false;
+        
+        // Hide properties panel
+        if (this.propertiesPanel) {
+            this.propertiesPanel.hideProperties();
+        }
     }
 
     /**
@@ -55,11 +80,9 @@ class SelectTool extends BaseTool {
      */
     updateStatusHint() {
         if (this.selectedShapes.length === 0) {
-            this.statusHint = 'Select: Click to select a shape, or drag to select multiple shapes';
-        } else if (this.selectedShapes.length === 1) {
-            this.statusHint = 'Select: Shape selected. Drag to move, press Delete to remove';
+            this.statusHint = 'Select: Click to select a shape';
         } else {
-            this.statusHint = `Select: ${this.selectedShapes.length} shapes selected. Drag to move, press Delete to remove`;
+            this.statusHint = 'Select: Shape selected. Drag to move, press Delete to remove';
         }
         
         if (this.appState) {
@@ -101,28 +124,7 @@ class SelectTool extends BaseTool {
             return;
         }
         
-        // Check if clicking on a selected shape
-        const clickedOnSelected = this.selectedShapes.some(shape => {
-            if (shape.type === 'line') {
-                return shape.isPointOnLine(this.startPoint.x, this.startPoint.y, 5);
-            } else if (shape.type === 'rectangle') {
-                return shape.containsPoint(this.startPoint.x, this.startPoint.y);
-            } else if (shape.type === 'circle') {
-                return shape.isPointOnCircumference(this.startPoint.x, this.startPoint.y, 5);
-            } else if (shape.type === 'arc') {
-                return shape.isPointOnArc(this.startPoint.x, this.startPoint.y, 5);
-            }
-            return false;
-        });
-        
-        if (clickedOnSelected) {
-            // Start dragging selected shapes
-            this.dragging = true;
-            this.dragMode = 'move';
-            return;
-        }
-        
-        // Check if clicking on any shape
+        // Find all shapes at the clicked point
         const shapesAtPoint = this.canvasManager.findShapesAtPoint(
             this.startPoint.x, 
             this.startPoint.y,
@@ -130,24 +132,40 @@ class SelectTool extends BaseTool {
         );
         
         if (shapesAtPoint.length > 0) {
-            // Select the shape if not holding shift
-            if (!event.shiftKey) {
-                this.selectedShapes = [shapesAtPoint[0]];
-                this.canvasManager.selectElements(this.selectedShapes);
-            } else {
-                // Add to selection if holding shift
-                this.selectedShapes.push(shapesAtPoint[0]);
-                this.canvasManager.selectElements(this.selectedShapes);
-            }
+            // Get the first shape at the point
+            const clickedShape = shapesAtPoint[0];
             
-            // Start dragging the shape
-            this.dragging = true;
-            this.dragMode = 'move';
-        } else {
-            // Start selection rectangle if not clicking on any shape
-            if (!event.shiftKey) {
-                this.selectedShapes = [];
+            // Check if we're clicking on the already selected shape
+            const isClickingSelectedShape = this.selectedShapes.length === 1 && 
+                                           this.selectedShapes[0].id === clickedShape.id;
+            
+            if (isClickingSelectedShape) {
+                // If clicking on the already selected shape, just start dragging
+                this.dragging = true;
+                this.dragMode = 'move';
+            } else {
+                // If clicking on a different shape, deselect all and select the new one
                 this.canvasManager.deselectAll();
+                this.selectedShapes = [clickedShape];
+                this.canvasManager.selectElements(clickedShape);
+                
+                // Show properties for the selected shape
+                if (this.propertiesPanel) {
+                    this.propertiesPanel.showProperties(clickedShape);
+                }
+                
+                // Start dragging the shape
+                this.dragging = true;
+                this.dragMode = 'move';
+            }
+        } else {
+            // Deselect all if clicking on empty space
+            this.canvasManager.deselectAll();
+            this.selectedShapes = [];
+            
+            // Hide properties panel
+            if (this.propertiesPanel) {
+                this.propertiesPanel.hideProperties();
             }
             
             this.selectionRect = {
@@ -233,6 +251,11 @@ class SelectTool extends BaseTool {
             // Finalize the drag operation
             this.dragging = false;
             this.canvasManager.clearPreview();
+            
+            // Update properties panel if a single shape is selected
+            if (this.selectedShapes.length === 1 && this.propertiesPanel) {
+                this.propertiesPanel.updateProperties(this.selectedShapes[0]);
+            }
         } else if (this.selectionRect) {
             // Normalize the selection rectangle (handle negative width/height)
             const x = Math.min(this.startPoint.x, this.currentPoint.x);
@@ -244,14 +267,15 @@ class SelectTool extends BaseTool {
             const shapesInRect = this.canvasManager.findShapesInRect(x, y, width, height);
             
             if (shapesInRect.length > 0) {
-                // Add to existing selection if shift key is pressed
-                if (event.shiftKey) {
-                    this.selectedShapes = [...this.selectedShapes, ...shapesInRect];
-                } else {
-                    this.selectedShapes = shapesInRect;
-                }
+                // Select only the first shape found
+                this.canvasManager.deselectAll();
+                this.selectedShapes = [shapesInRect[0]];
+                this.canvasManager.selectElements(this.selectedShapes[0]);
                 
-                this.canvasManager.selectElements(this.selectedShapes);
+                // Show properties for the selected shape
+                if (this.propertiesPanel) {
+                    this.propertiesPanel.showProperties(this.selectedShapes[0]);
+                }
             }
             
             this.selectionRect = null;
@@ -346,6 +370,11 @@ class SelectTool extends BaseTool {
             
             this.canvasManager.updateShape(originalShape);
         });
+        
+        // Update properties panel if a single shape is selected
+        if (this.selectedShapes.length === 1 && this.propertiesPanel) {
+            this.propertiesPanel.updateProperties(this.selectedShapes[0]);
+        }
     }
 
     /**
@@ -400,6 +429,12 @@ class SelectTool extends BaseTool {
         });
         
         this.selectedShapes = [];
+        
+        // Hide properties panel
+        if (this.propertiesPanel) {
+            this.propertiesPanel.hideProperties();
+        }
+        
         this.updateStatusHint();
         
         logger.info('Deleted selected shapes');
@@ -413,9 +448,42 @@ class SelectTool extends BaseTool {
         
         this.selectedShapes = [...this.canvasManager.shapes];
         this.canvasManager.selectElements(this.selectedShapes);
+        
+        // Hide properties panel if multiple shapes are selected
+        if (this.propertiesPanel) {
+            if (this.selectedShapes.length === 1) {
+                this.propertiesPanel.showProperties(this.selectedShapes[0]);
+            } else {
+                this.propertiesPanel.hideProperties();
+            }
+        }
+        
         this.updateStatusHint();
         
         logger.info('Selected all shapes');
+    }
+
+    /**
+     * Handle canvas manager events
+     * @param {string} event - The event name
+     * @param {Object} data - The event data
+     */
+    handleCanvasManagerEvent(event, data) {
+        if (!this.active) return;
+        
+        switch (event) {
+            case 'selectionChanged':
+                this.selectedShapes = [...this.canvasManager.selectedElements];
+                this.updateStatusHint();
+                break;
+                
+            case 'selectionCleared':
+                this.selectedShapes = [];
+                this.updateStatusHint();
+                break;
+                
+            // Add other events as needed
+        }
     }
 }
 
