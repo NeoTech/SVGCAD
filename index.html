@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAD Editor v2</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Alpine.js - Load before other scripts -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body>
+    <div class="app-container" x-data="appData">
+        <header class="toolbar">
+            <div class="logo">CAD Editor v2</div>
+            <div class="tool-buttons">
+                <button @click="activateTool('select')" :class="{ active: activeTool === 'select' }">Select</button>
+                <button @click="activateTool('line')" :class="{ active: activeTool === 'line' }">Line</button>
+                <button @click="activateTool('rectangle')" :class="{ active: activeTool === 'rectangle' }">Rectangle</button>
+                <button @click="activateTool('circle')" :class="{ active: activeTool === 'circle' }">Circle</button>
+                <button @click="activateTool('arc')" :class="{ active: activeTool === 'arc' }">Arc</button>
+            </div>
+            <div class="settings">
+                <button @click="toggleDebugMode()">Debug: <span x-text="debugMode ? 'On' : 'Off'"></span></button>
+                <button @click="toggleGrid()">Grid: <span x-text="gridVisible ? 'On' : 'Off'"></span></button>
+                <button @click="toggleSnapToGrid()">Snap Grid: <span x-text="snapToGrid ? 'On' : 'Off'"></span></button>
+                <button @click="toggleSnapToPoints()">Snap Points: <span x-text="snapToPoints ? 'On' : 'Off'"></span></button>
+                <button @click="toggleSnapToLines()">Snap Lines: <span x-text="snapToLines ? 'On' : 'Off'"></span></button>
+            </div>
+            <div class="actions">
+                <button @click="undo()">Undo</button>
+                <button @click="redo()">Redo</button>
+                <button @click="clearCanvas()">Clear</button>
+                <button @click="exportSVG()">Export SVG</button>
+            </div>
+        </header>
+        
+        <main class="content">
+            <div class="canvas-container" id="canvas-container">
+                <!-- SVG Canvas -->
+                <svg id="svg-canvas" width="800" height="600" viewBox="0 0 800 600">
+                    <!-- Required SVG groups in proper order -->
+                    <g id="grid-group"></g>
+                    <g id="shapes-group"></g>
+                    <g id="preview-group"></g>
+                    <g id="selection-group"></g>
+                    <g id="measurement-group"></g>
+                </svg>
+                <!-- Transparent overlay for reliable event capture -->
+                <div id="canvas-overlay" class="canvas-overlay"></div>
+            </div>
+            
+            <div id="property-panel" class="property-panel" x-show="activeTool === 'select'">
+                <h3>Properties</h3>
+                <div class="property-content">
+                    <!-- Property panel content will be dynamically populated -->
+                    <p>Select an element to view and edit its properties.</p>
+                </div>
+            </div>
+        </main>
+        
+        <div id="debug-panel" class="debug-panel" x-show="debugMode">
+            <h3>Debug Panel</h3>
+            <div class="debug-section">
+                <h4>Application State</h4>
+                <div>Active Tool: <span x-text="activeTool"></span></div>
+                <div>Mouse Position: <span x-text="`X: ${mousePosition.x.toFixed(2)}, Y: ${mousePosition.y.toFixed(2)}`"></span></div>
+            </div>
+            <div class="debug-section">
+                <h4>Log</h4>
+                <div class="log-container">
+                    <template x-for="(entry, index) in logs" :key="index">
+                        <div class="log-entry" :class="entry.level">
+                            <span class="timestamp" x-text="entry.timestamp"></span>
+                            <span class="message" x-text="entry.message"></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="status-bar">
+            <div class="coordinates">
+                X: <span x-text="mousePosition.x.toFixed(2)"></span>
+                Y: <span x-text="mousePosition.y.toFixed(2)"></span>
+            </div>
+            <div class="hint" x-text="statusHint"></div>
+        </footer>
+    </div>
+
+    <!-- Load scripts in the correct order -->
+    <script src="js/utils/logger.js"></script>
+    <script src="js/utils/mathUtils.js"></script>
+    <script src="js/models/point.js"></script>
+    <script src="js/models/line.js"></script>
+    <script src="js/models/rectangle.js"></script>
+    <script src="js/models/circle.js"></script>
+    <script src="js/models/arc.js"></script>
+    <script src="js/managers/canvasManager.js"></script>
+    <script src="js/managers/constraintManager.js"></script>
+    <script src="js/managers/appStateManager.js"></script>
+    <script src="js/tools/baseTool.js"></script>
+    <script src="js/tools/selectTool.js"></script>
+    <script src="js/tools/lineTool.js"></script>
+    <script src="js/tools/rectangleTool.js"></script>
+    <script src="js/tools/circleTool.js"></script>
+    <script src="js/tools/arcTool.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html> 

@@ -1,0 +1,22 @@
+{
+  "name": "cad-editor-v2",
+  "version": "1.0.0",
+  "description": "A web-based CAD editor built with JavaScript, SVG, and Alpine.js",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve",
+    "dev": "serve -l 3000"
+  },
+  "keywords": [
+    "cad",
+    "editor",
+    "svg",
+    "javascript",
+    "alpinejs"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "^14.2.1"
+  }
+} 
