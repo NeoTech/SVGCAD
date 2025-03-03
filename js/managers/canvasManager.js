@@ -152,8 +152,19 @@ class CanvasManager {
      * @param {number} size - The new grid size
      */
     setGridSize(size) {
+        if (size < 1) {
+            logger.warn('Grid size must be at least 1');
+            return;
+        }
+        
         this.gridSize = size;
         this.drawGrid();
+        
+        // Update Alpine.js data
+        if (window.appData) {
+            window.appData.gridSize = size;
+        }
+        
         logger.info(`Grid size set to ${size}`);
     }
 
@@ -280,9 +291,15 @@ class CanvasManager {
     /**
      * Add a shape to the canvas
      * @param {Object} shape - The shape to add
+     * @param {boolean} [recordUndo=true] - Whether to record this action for undo
      */
-    addShape(shape) {
+    addShape(shape, recordUndo = true) {
         if (!shape) return;
+        
+        // Save state for undo if needed
+        if (recordUndo && window.appStateManager) {
+            window.appStateManager.pushUndoState();
+        }
         
         // Ensure the shape is an instance of its respective class
         let shapeInstance;
@@ -322,8 +339,14 @@ class CanvasManager {
     /**
      * Remove a shape from the canvas
      * @param {string} id - The ID of the shape to remove
+     * @param {boolean} [recordUndo=true] - Whether to record this action for undo
      */
-    removeShape(id) {
+    removeShape(id, recordUndo = true) {
+        // Save state for undo if needed
+        if (recordUndo && window.appStateManager) {
+            window.appStateManager.pushUndoState();
+        }
+        
         const index = this.shapes.findIndex(shape => shape.id === id);
         
         if (index !== -1) {
@@ -342,9 +365,15 @@ class CanvasManager {
     /**
      * Update a shape on the canvas
      * @param {Object} shape - The shape to update
+     * @param {boolean} [recordUndo=true] - Whether to record this action for undo
      */
-    updateShape(shape) {
+    updateShape(shape, recordUndo = true) {
         if (!shape || !shape.id) return;
+        
+        // Save state for undo if needed
+        if (recordUndo && window.appStateManager) {
+            window.appStateManager.pushUndoState();
+        }
         
         const index = this.shapes.findIndex(s => s.id === shape.id);
         
@@ -789,7 +818,42 @@ class CanvasManager {
             return;
         }
         
-        this.shapes = shapesSnapshot;
+        // Convert plain objects to shape instances
+        this.shapes = shapesSnapshot.map(shape => {
+            let shapeInstance;
+            
+            switch (shape.type) {
+                case 'line':
+                    shapeInstance = new Line(shape.x1, shape.y1, shape.x2, shape.y2);
+                    shapeInstance.id = shape.id;
+                    break;
+                    
+                case 'rectangle':
+                    shapeInstance = new Rectangle(shape.x, shape.y, shape.width, shape.height);
+                    shapeInstance.id = shape.id;
+                    break;
+                    
+                case 'circle':
+                    shapeInstance = new Circle(shape.cx, shape.cy, shape.radius);
+                    shapeInstance.id = shape.id;
+                    break;
+                    
+                case 'arc':
+                    shapeInstance = new Arc(shape.cx, shape.cy, shape.radius, shape.startAngle, shape.endAngle);
+                    shapeInstance.id = shape.id;
+                    break;
+                    
+                default:
+                    shapeInstance = shape;
+                    break;
+            }
+            
+            return shapeInstance;
+        });
+        
+        // Clear selection
+        this.selectedElements = [];
+        
         this.render();
         
         logger.info('Shapes restored from snapshot');

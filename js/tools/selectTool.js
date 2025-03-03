@@ -508,9 +508,14 @@ class SelectTool extends BaseTool {
     deleteSelectedShapes() {
         if (!this.canvasManager || this.selectedShapes.length === 0) return;
         
-        // Remove each selected shape
+        // Save state for undo
+        if (window.appStateManager) {
+            window.appStateManager.pushUndoState();
+        }
+        
+        // Remove each selected shape without recording individual undo states
         this.selectedShapes.forEach(shape => {
-            this.canvasManager.removeShape(shape.id);
+            this.canvasManager.removeShape(shape.id, false);
         });
         
         this.selectedShapes = [];

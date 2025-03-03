@@ -22,6 +22,7 @@ class AppStateManager {
         this.undoStack = [];
         this.redoStack = [];
         this.maxUndoSteps = 50;
+        this.autoSaveEnabled = true;
     }
 
     /**
@@ -43,6 +44,20 @@ class AppStateManager {
         
         // Connect logger to Alpine.js data
         this.connectLoggerToAlpine();
+        
+        // Initialize Alpine.js data with current values
+        if (window.appData) {
+            window.appData.gridSize = this.canvasManager.gridSize;
+            window.appData.snapDistance = this.constraintManager.snapDistance;
+            window.appData.maxUndoSteps = this.maxUndoSteps;
+            window.appData.autoSaveEnabled = this.autoSaveEnabled;
+        }
+        
+        // Load undo/redo stacks from localStorage if available
+        this.loadUndoRedoState();
+        
+        // Initialize UI state
+        this.updateUndoRedoState();
         
         this.initialized = true;
         logger.info('AppStateManager initialized');
@@ -222,6 +237,32 @@ class AppStateManager {
     }
 
     /**
+     * Set the grid size
+     * @param {number} size - The new grid size
+     */
+    setGridSize(size) {
+        if (!this.canvasManager) {
+            logger.warn('Canvas Manager not initialized');
+            return;
+        }
+        
+        this.canvasManager.setGridSize(size);
+    }
+
+    /**
+     * Set the snap distance
+     * @param {number} distance - The new snap distance in pixels
+     */
+    setSnapDistance(distance) {
+        if (!this.constraintManager) {
+            logger.warn('Constraint Manager not initialized');
+            return;
+        }
+        
+        this.constraintManager.setSnapDistance(distance);
+    }
+
+    /**
      * Toggle debug mode
      */
     toggleDebugMode() {
@@ -340,6 +381,138 @@ class AppStateManager {
     }
 
     /**
+     * Set the maximum number of undo steps
+     * @param {number} steps - The maximum number of undo steps
+     */
+    setMaxUndoSteps(steps) {
+        if (steps < 1) {
+            logger.warn('Max undo steps must be at least 1');
+            return;
+        }
+        
+        this.maxUndoSteps = steps;
+        
+        // Trim undo stack if needed
+        while (this.undoStack.length > this.maxUndoSteps) {
+            this.undoStack.shift();
+        }
+        
+        // Update localStorage
+        this.saveUndoRedoState();
+        
+        logger.info(`Max undo steps set to ${steps}`);
+    }
+
+    /**
+     * Toggle auto-save for undo/redo state
+     * @param {boolean} [enabled] - Whether auto-save should be enabled
+     */
+    toggleAutoSave(enabled) {
+        this.autoSaveEnabled = enabled !== undefined ? enabled : !this.autoSaveEnabled;
+        
+        if (window.appData) {
+            window.appData.autoSaveEnabled = this.autoSaveEnabled;
+        }
+        
+        logger.info(`Auto-save ${this.autoSaveEnabled ? 'enabled' : 'disabled'}`);
+    }
+
+    /**
+     * Save undo/redo state to localStorage
+     */
+    saveUndoRedoState() {
+        if (!this.autoSaveEnabled) return;
+        
+        try {
+            localStorage.setItem('cadEditor_undoStack', JSON.stringify(this.undoStack));
+            localStorage.setItem('cadEditor_redoStack', JSON.stringify(this.redoStack));
+            localStorage.setItem('cadEditor_maxUndoSteps', this.maxUndoSteps.toString());
+            logger.debug('Undo/redo state saved to localStorage');
+        } catch (error) {
+            logger.error(`Failed to save undo/redo state: ${error.message}`);
+        }
+    }
+
+    /**
+     * Load undo/redo state from localStorage
+     */
+    loadUndoRedoState() {
+        try {
+            // Load max undo steps
+            const savedMaxUndoSteps = localStorage.getItem('cadEditor_maxUndoSteps');
+            if (savedMaxUndoSteps) {
+                this.maxUndoSteps = parseInt(savedMaxUndoSteps, 10);
+                
+                if (window.appData) {
+                    window.appData.maxUndoSteps = this.maxUndoSteps;
+                }
+            }
+            
+            // Only load stacks if auto-save is enabled
+            if (!this.autoSaveEnabled) return;
+            
+            const savedUndoStack = localStorage.getItem('cadEditor_undoStack');
+            const savedRedoStack = localStorage.getItem('cadEditor_redoStack');
+            
+            if (savedUndoStack) {
+                this.undoStack = JSON.parse(savedUndoStack);
+            }
+            
+            if (savedRedoStack) {
+                this.redoStack = JSON.parse(savedRedoStack);
+            }
+            
+            logger.info('Undo/redo state loaded from localStorage');
+        } catch (error) {
+            logger.error(`Failed to load undo/redo state: ${error.message}`);
+            // Reset stacks in case of error
+            this.undoStack = [];
+            this.redoStack = [];
+        }
+    }
+
+    /**
+     * Clear undo/redo state from localStorage
+     */
+    clearUndoRedoState() {
+        try {
+            localStorage.removeItem('cadEditor_undoStack');
+            localStorage.removeItem('cadEditor_redoStack');
+            this.undoStack = [];
+            this.redoStack = [];
+            logger.info('Undo/redo state cleared from localStorage');
+        } catch (error) {
+            logger.error(`Failed to clear undo/redo state: ${error.message}`);
+        }
+    }
+
+    /**
+     * Check if there are actions to undo
+     * @returns {boolean} True if there are actions to undo
+     */
+    canUndo() {
+        return this.undoStack.length > 0;
+    }
+
+    /**
+     * Check if there are actions to redo
+     * @returns {boolean} True if there are actions to redo
+     */
+    canRedo() {
+        return this.redoStack.length > 0;
+    }
+
+    /**
+     * Update the undo/redo button states in the UI
+     */
+    updateUndoRedoState() {
+        if (window.appData) {
+            window.appData.canUndo = this.canUndo();
+            window.appData.canRedo = this.canRedo();
+        }
+    }
+
+    /**
      * Push a state to the undo stack
      */
     pushUndoState() {
@@ -357,9 +530,15 @@ class AppStateManager {
         this.redoStack = [];
         
         // Limit undo stack size
-        if (this.undoStack.length > this.maxUndoSteps) {
+        while (this.undoStack.length > this.maxUndoSteps) {
             this.undoStack.shift();
         }
+        
+        // Save to localStorage
+        this.saveUndoRedoState();
+        
+        // Update UI
+        this.updateUndoRedoState();
         
         logger.debug('Undo state saved');
     }
@@ -387,6 +566,12 @@ class AppStateManager {
         // Apply state
         this.canvasManager.restoreShapesFromSnapshot(state.shapes);
         
+        // Save to localStorage
+        this.saveUndoRedoState();
+        
+        // Update UI
+        this.updateUndoRedoState();
+        
         logger.info('Undo performed');
     }
 
@@ -413,6 +598,12 @@ class AppStateManager {
         // Apply state
         this.canvasManager.restoreShapesFromSnapshot(state.shapes);
         
+        // Save to localStorage
+        this.saveUndoRedoState();
+        
+        // Update UI
+        this.updateUndoRedoState();
+        
         logger.info('Redo performed');
     }
 
@@ -422,11 +613,18 @@ class AppStateManager {
     clearCanvas() {
         if (!this.canvasManager) return;
         
-        // Save current state for undo
-        this.pushUndoState();
+        // Clear undo/redo stacks
+        this.undoStack = [];
+        this.redoStack = [];
+        
+        // Clear localStorage
+        this.clearUndoRedoState();
         
         // Clear canvas
         this.canvasManager.clearShapes();
+        
+        // Update UI
+        this.updateUndoRedoState();
         
         logger.info('Canvas cleared');
     }

@@ -62,14 +62,37 @@ class ConstraintManager {
 
     /**
      * Toggle a constraint
-     * @param {string} constraint - The constraint to toggle (horizontal, vertical, parallel, perpendicular)
+     * @param {string} constraintName - The name of the constraint to toggle
      * @param {boolean} enabled - Whether the constraint should be enabled
      */
-    toggleConstraint(constraint, enabled) {
-        if (this.activeConstraints.hasOwnProperty(constraint)) {
-            this.activeConstraints[constraint] = enabled !== undefined ? enabled : !this.activeConstraints[constraint];
-            logger.info(`Constraint ${constraint} ${this.activeConstraints[constraint] ? 'enabled' : 'disabled'}`);
+    toggleConstraint(constraintName, enabled) {
+        if (constraintName === 'snapToGrid') {
+            this.snapToGrid = enabled;
+            logger.info(`Snap to grid ${this.snapToGrid ? 'enabled' : 'disabled'}`);
+        } else if (constraintName === 'snapToPoints') {
+            this.snapToPoints = enabled;
+            logger.info(`Snap to points ${this.snapToPoints ? 'enabled' : 'disabled'}`);
+        } else if (constraintName === 'snapToLines') {
+            this.snapToLines = enabled;
+            logger.info(`Snap to lines ${this.snapToLines ? 'enabled' : 'disabled'}`);
+        } else if (this.activeConstraints.hasOwnProperty(constraintName)) {
+            this.activeConstraints[constraintName] = enabled !== undefined ? enabled : !this.activeConstraints[constraintName];
+            logger.info(`Constraint ${constraintName} ${this.activeConstraints[constraintName] ? 'enabled' : 'disabled'}`);
         }
+    }
+
+    /**
+     * Set the snap distance
+     * @param {number} distance - The new snap distance in pixels
+     */
+    setSnapDistance(distance) {
+        if (distance < 1) {
+            logger.warn('Snap distance must be at least 1');
+            return;
+        }
+        
+        this.snapDistance = distance;
+        logger.info(`Snap distance set to ${distance}`);
     }
 
     /**
@@ -83,28 +106,7 @@ class ConstraintManager {
         
         let result = { x, y };
         
-        // Apply grid snapping if enabled
-        if (this.snapToGrid && this.canvasManager.snapEnabled) {
-            result = this.canvasManager.snapToGrid(result.x, result.y);
-        }
-        
-        // Apply point snapping if enabled
-        if (this.snapToPoints) {
-            const snappedToPoint = this.snapToNearestPoint(result.x, result.y);
-            if (snappedToPoint) {
-                result = snappedToPoint;
-            }
-        }
-        
-        // Apply line snapping if enabled
-        if (this.snapToLines) {
-            const snappedToLine = this.snapToNearestLine(result.x, result.y);
-            if (snappedToLine) {
-                result = snappedToLine;
-            }
-        }
-        
-        // Apply active constraints
+        // Apply active constraints first (horizontal/vertical)
         if (this.referencePoint) {
             if (this.activeConstraints.horizontal) {
                 result.y = this.referencePoint.y;
@@ -112,6 +114,29 @@ class ConstraintManager {
             
             if (this.activeConstraints.vertical) {
                 result.x = this.referencePoint.x;
+            }
+        }
+        
+        // Apply grid snapping if enabled
+        if (this.snapToGrid && this.canvasManager.snapEnabled) {
+            result = this.canvasManager.snapToGrid(result.x, result.y);
+        }
+        
+        // Apply point snapping if enabled and no active constraints
+        if (this.snapToPoints && !this.activeConstraints.horizontal && !this.activeConstraints.vertical) {
+            const snappedToPoint = this.snapToNearestPoint(result.x, result.y);
+            if (snappedToPoint) {
+                result = snappedToPoint;
+                // Point snapping takes precedence over line snapping
+                return result;
+            }
+        }
+        
+        // Apply line snapping if enabled and no active constraints
+        if (this.snapToLines && !this.activeConstraints.horizontal && !this.activeConstraints.vertical) {
+            const snappedToLine = this.snapToNearestLine(result.x, result.y);
+            if (snappedToLine) {
+                result = snappedToLine;
             }
         }
         
@@ -174,11 +199,16 @@ class ConstraintManager {
             for (const point of snapPoints) {
                 const distance = MathUtils.distance(x, y, point.x, point.y);
                 
-                if (distance < minDistance) {
+                if (distance < worldSnapDistance && distance < minDistance) {
                     minDistance = distance;
                     closestPoint = point;
                 }
             }
+        }
+        
+        // Visual feedback for snap points (in debug mode)
+        if (closestPoint && this.canvasManager.appState && this.canvasManager.appState.debugMode) {
+            this.showSnapIndicator(closestPoint.x, closestPoint.y, 'point');
         }
         
         return closestPoint;
@@ -209,7 +239,7 @@ class ConstraintManager {
                 if (projectedPoint) {
                     const distance = MathUtils.distance(x, y, projectedPoint.x, projectedPoint.y);
                     
-                    if (distance < minDistance) {
+                    if (distance < worldSnapDistance && distance < minDistance) {
                         minDistance = distance;
                         closestPoint = projectedPoint;
                     }
@@ -229,7 +259,7 @@ class ConstraintManager {
                     if (projectedPoint) {
                         const distance = MathUtils.distance(x, y, projectedPoint.x, projectedPoint.y);
                         
-                        if (distance < minDistance) {
+                        if (distance < worldSnapDistance && distance < minDistance) {
                             minDistance = distance;
                             closestPoint = projectedPoint;
                         }
@@ -248,12 +278,17 @@ class ConstraintManager {
                     
                     const distance = MathUtils.distance(x, y, snapPoint.x, snapPoint.y);
                     
-                    if (distance < minDistance) {
+                    if (distance < worldSnapDistance && distance < minDistance) {
                         minDistance = distance;
                         closestPoint = snapPoint;
                     }
                 }
             }
+        }
+        
+        // Visual feedback for snap lines (in debug mode)
+        if (closestPoint && this.canvasManager.appState && this.canvasManager.appState.debugMode) {
+            this.showSnapIndicator(closestPoint.x, closestPoint.y, 'line');
         }
         
         return closestPoint;
@@ -339,6 +374,48 @@ class ConstraintManager {
             x: x1 + distance * Math.cos(perpAngle),
             y: y1 + distance * Math.sin(perpAngle)
         };
+    }
+
+    /**
+     * Show a visual indicator for snap points or lines
+     * @param {number} x - X coordinate
+     * @param {number} y - Y coordinate
+     * @param {string} type - Type of snap ('point' or 'line')
+     */
+    showSnapIndicator(x, y, type) {
+        if (!this.canvasManager || !this.canvasManager.measurementGroup) return;
+        
+        // Clear previous indicators
+        const existingIndicators = document.querySelectorAll('.snap-indicator');
+        existingIndicators.forEach(indicator => indicator.remove());
+        
+        // Create indicator
+        const indicator = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        indicator.setAttribute('cx', x);
+        indicator.setAttribute('cy', y);
+        indicator.setAttribute('r', 5 / this.canvasManager.zoom); // Size adjusted for zoom
+        indicator.setAttribute('class', 'snap-indicator');
+        
+        // Different styles for point vs line snapping
+        if (type === 'point') {
+            indicator.setAttribute('fill', 'rgba(0, 255, 0, 0.5)');
+            indicator.setAttribute('stroke', 'green');
+        } else {
+            indicator.setAttribute('fill', 'rgba(0, 0, 255, 0.5)');
+            indicator.setAttribute('stroke', 'blue');
+        }
+        
+        indicator.setAttribute('stroke-width', 1 / this.canvasManager.zoom);
+        
+        // Add to measurement group
+        this.canvasManager.measurementGroup.appendChild(indicator);
+        
+        // Remove after a short delay
+        setTimeout(() => {
+            if (indicator.parentNode) {
+                indicator.parentNode.removeChild(indicator);
+            }
+        }, 500);
     }
 }
 

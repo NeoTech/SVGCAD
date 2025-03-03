@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CAD Editor v2</title>
+    <title>Roughedge Machineworks</title>
     <link rel="stylesheet" href="css/styles.css">
     <!-- Alpine.js - Load before other scripts -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -11,7 +11,7 @@
 <body>
     <div class="app-container" x-data="appData">
         <header class="toolbar">
-            <div class="logo">CAD Editor v2</div>
+            <div class="logo">Roughedge Machineworks</div>
             <div class="tool-buttons">
                 <button @click="activateTool('select')" :class="{ active: activeTool === 'select' }">Select</button>
                 <button @click="activateTool('line')" :class="{ active: activeTool === 'line' }">Line</button>
@@ -22,13 +22,40 @@
             <div class="settings">
                 <button @click="toggleDebugMode()">Debug: <span x-text="debugMode ? 'On' : 'Off'"></span></button>
                 <button @click="toggleGrid()">Grid: <span x-text="gridVisible ? 'On' : 'Off'"></span></button>
+                <div class="grid-size-control">
+                    <label for="grid-size">Grid Size:</label>
+                    <select id="grid-size" x-model="gridSize" @change="setGridSize()">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
                 <button @click="toggleSnapToGrid()">Snap Grid: <span x-text="snapToGrid ? 'On' : 'Off'"></span></button>
                 <button @click="toggleSnapToPoints()">Snap Points: <span x-text="snapToPoints ? 'On' : 'Off'"></span></button>
                 <button @click="toggleSnapToLines()">Snap Lines: <span x-text="snapToLines ? 'On' : 'Off'"></span></button>
+                <div class="snap-distance-control">
+                    <label for="snap-distance">Snap Distance:</label>
+                    <select id="snap-distance" x-model="snapDistance" @change="setSnapDistance()">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="15">15</option>
+                        <option value="20">20</option>
+                    </select>
+                </div>
             </div>
             <div class="actions">
-                <button @click="undo()">Undo</button>
-                <button @click="redo()">Redo</button>
+                <button @click="undo()" title="Undo (Ctrl+Z)" :disabled="!canUndo">Undo</button>
+                <button @click="redo()" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" :disabled="!canRedo">Redo</button>
+                <div class="undo-settings">
+                    <label for="max-undo-steps">Max Undo Steps:</label>
+                    <input type="number" id="max-undo-steps" x-model="maxUndoSteps" min="1" max="200" @change="setMaxUndoSteps()">
+                    <label>
+                        <input type="checkbox" x-model="autoSaveEnabled" @change="toggleAutoSave()">
+                        Auto-Save
+                    </label>
+                </div>
                 <button @click="clearCanvas()">Clear</button>
                 <button @click="exportSVG()">Export SVG</button>
             </div>

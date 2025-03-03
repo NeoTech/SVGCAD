@@ -11,9 +11,15 @@ document.addEventListener('alpine:init', () => {
         statusHint: 'Ready',
         mousePosition: { x: 0, y: 0 },
         gridVisible: true,
+        gridSize: 10,
         snapToGrid: true,
         snapToPoints: true,
         snapToLines: true,
+        snapDistance: 10,
+        maxUndoSteps: 50,
+        autoSaveEnabled: true,
+        canUndo: false,
+        canRedo: false,
         debugMode: false,
         logs: [],
         
@@ -40,6 +46,26 @@ document.addEventListener('alpine:init', () => {
                 window.appStateManager.toggleSnapToGrid();
             } else {
                 this.snapToGrid = !this.snapToGrid;
+                console.error('appStateManager not initialized');
+            }
+        },
+        
+        setGridSize() {
+            if (window.appStateManager) {
+                // Convert to number since x-model binds as string
+                const size = parseInt(this.gridSize, 10);
+                window.appStateManager.setGridSize(size);
+            } else {
+                console.error('appStateManager not initialized');
+            }
+        },
+        
+        setSnapDistance() {
+            if (window.appStateManager) {
+                // Convert to number since x-model binds as string
+                const distance = parseInt(this.snapDistance, 10);
+                window.appStateManager.setSnapDistance(distance);
+            } else {
                 console.error('appStateManager not initialized');
             }
         },
@@ -82,6 +108,24 @@ document.addEventListener('alpine:init', () => {
         redo() {
             if (window.appStateManager) {
                 window.appStateManager.redo();
+            } else {
+                console.error('appStateManager not initialized');
+            }
+        },
+        
+        setMaxUndoSteps() {
+            if (window.appStateManager) {
+                // Convert to number since x-model binds as string
+                const steps = parseInt(this.maxUndoSteps, 10);
+                window.appStateManager.setMaxUndoSteps(steps);
+            } else {
+                console.error('appStateManager not initialized');
+            }
+        },
+        
+        toggleAutoSave() {
+            if (window.appStateManager) {
+                window.appStateManager.toggleAutoSave(this.autoSaveEnabled);
             } else {
                 console.error('appStateManager not initialized');
             }
