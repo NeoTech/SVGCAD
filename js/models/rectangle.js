@@ -13,8 +13,11 @@ class Rectangle {
     constructor(x, y, width, height) {
         this.x = x || 0;
         this.y = y || 0;
-        this.width = width || 0;
-        this.height = height || 0;
+        
+        // Ensure width and height are positive
+        this.width = Math.abs(width || 0);
+        this.height = Math.abs(height || 0);
+        
         this.type = 'rectangle';
         this.id = `rectangle_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     }

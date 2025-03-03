@@ -80,9 +80,11 @@ class SelectTool extends BaseTool {
      */
     updateStatusHint() {
         if (this.selectedShapes.length === 0) {
-            this.statusHint = 'Select: Click to select a shape';
-        } else {
+            this.statusHint = 'Select: Click to select a shape, drag to select multiple shapes, or hold Ctrl/Shift for multi-selection';
+        } else if (this.selectedShapes.length === 1) {
             this.statusHint = 'Select: Shape selected. Drag to move, press Delete to remove';
+        } else {
+            this.statusHint = `Select: ${this.selectedShapes.length} shapes selected. Drag to move, press Delete to remove`;
         }
         
         if (this.appState) {
@@ -110,6 +112,9 @@ class SelectTool extends BaseTool {
         this.dragStartPoint = this.startPoint.clone();
         this.lastDragPoint = this.startPoint.clone();
         
+        // Check if modifier key is pressed (Ctrl or Shift for multi-selection)
+        const isMultiSelectModifier = event.ctrlKey || event.shiftKey;
+        
         // Check if clicking on a resize handle
         if (this.isOnResizeHandle(this.startPoint.x, this.startPoint.y)) {
             this.dragging = true;
@@ -135,23 +140,49 @@ class SelectTool extends BaseTool {
             // Get the first shape at the point
             const clickedShape = shapesAtPoint[0];
             
-            // Check if we're clicking on the already selected shape
-            const isClickingSelectedShape = this.selectedShapes.length === 1 && 
-                                           this.selectedShapes[0].id === clickedShape.id;
+            // Check if we're clicking on an already selected shape
+            const isClickingSelectedShape = this.selectedShapes.some(shape => shape.id === clickedShape.id);
             
             if (isClickingSelectedShape) {
-                // If clicking on the already selected shape, just start dragging
-                this.dragging = true;
-                this.dragMode = 'move';
+                // If clicking on an already selected shape with modifier key, deselect it
+                if (isMultiSelectModifier) {
+                    this.canvasManager.deselectElement(clickedShape.id);
+                    this.selectedShapes = this.selectedShapes.filter(shape => shape.id !== clickedShape.id);
+                    
+                    // Update properties panel if needed
+                    if (this.selectedShapes.length === 1 && this.propertiesPanel) {
+                        this.propertiesPanel.showProperties(this.selectedShapes[0]);
+                    } else if (this.propertiesPanel) {
+                        this.propertiesPanel.hideProperties();
+                    }
+                } else {
+                    // If clicking on an already selected shape without modifier, just start dragging
+                    this.dragging = true;
+                    this.dragMode = 'move';
+                }
             } else {
-                // If clicking on a different shape, deselect all and select the new one
-                this.canvasManager.deselectAll();
-                this.selectedShapes = [clickedShape];
-                this.canvasManager.selectElements(clickedShape);
-                
-                // Show properties for the selected shape
-                if (this.propertiesPanel) {
-                    this.propertiesPanel.showProperties(clickedShape);
+                // If clicking on a different shape
+                if (isMultiSelectModifier) {
+                    // Add to selection if modifier key is pressed
+                    this.selectedShapes.push(clickedShape);
+                    this.canvasManager.selectElements(clickedShape, false);
+                    
+                    // Update properties panel if needed
+                    if (this.selectedShapes.length === 1 && this.propertiesPanel) {
+                        this.propertiesPanel.showProperties(this.selectedShapes[0]);
+                    } else if (this.propertiesPanel) {
+                        this.propertiesPanel.hideProperties();
+                    }
+                } else {
+                    // If no modifier key, deselect all and select the new one
+                    this.canvasManager.deselectAll();
+                    this.selectedShapes = [clickedShape];
+                    this.canvasManager.selectElements(clickedShape);
+                    
+                    // Show properties for the selected shape
+                    if (this.propertiesPanel) {
+                        this.propertiesPanel.showProperties(clickedShape);
+                    }
                 }
                 
                 // Start dragging the shape
@@ -159,15 +190,19 @@ class SelectTool extends BaseTool {
                 this.dragMode = 'move';
             }
         } else {
-            // Deselect all if clicking on empty space
-            this.canvasManager.deselectAll();
-            this.selectedShapes = [];
-            
-            // Hide properties panel
-            if (this.propertiesPanel) {
-                this.propertiesPanel.hideProperties();
+            // If clicking on empty space
+            if (!isMultiSelectModifier) {
+                // Deselect all if not using modifier key
+                this.canvasManager.deselectAll();
+                this.selectedShapes = [];
+                
+                // Hide properties panel
+                if (this.propertiesPanel) {
+                    this.propertiesPanel.hideProperties();
+                }
             }
             
+            // Start selection rectangle
             this.selectionRect = {
                 x: this.startPoint.x,
                 y: this.startPoint.y,
@@ -217,13 +252,14 @@ class SelectTool extends BaseTool {
                 this.selectionRect.width = this.currentPoint.x - this.startPoint.x;
                 this.selectionRect.height = this.currentPoint.y - this.startPoint.y;
                 
+                // Calculate normalized rectangle coordinates (ensure positive width/height)
+                const x = this.selectionRect.width >= 0 ? this.startPoint.x : this.currentPoint.x;
+                const y = this.selectionRect.height >= 0 ? this.startPoint.y : this.currentPoint.y;
+                const width = Math.abs(this.selectionRect.width);
+                const height = Math.abs(this.selectionRect.height);
+                
                 // Preview the selection rectangle
-                const previewRect = new Rectangle(
-                    this.selectionRect.x,
-                    this.selectionRect.y,
-                    this.selectionRect.width,
-                    this.selectionRect.height
-                );
+                const previewRect = new Rectangle(x, y, width, height);
                 
                 this.canvasManager.setPreviewElement(previewRect);
             }
@@ -247,6 +283,9 @@ class SelectTool extends BaseTool {
         
         this.currentPoint = new Point(worldPos.x, worldPos.y);
         
+        // Check if modifier key is pressed (Ctrl or Shift for multi-selection)
+        const isMultiSelectModifier = event.ctrlKey || event.shiftKey;
+        
         if (this.dragging) {
             // Finalize the drag operation
             this.dragging = false;
@@ -267,14 +306,28 @@ class SelectTool extends BaseTool {
             const shapesInRect = this.canvasManager.findShapesInRect(x, y, width, height);
             
             if (shapesInRect.length > 0) {
-                // Select only the first shape found
-                this.canvasManager.deselectAll();
-                this.selectedShapes = [shapesInRect[0]];
-                this.canvasManager.selectElements(this.selectedShapes[0]);
+                if (isMultiSelectModifier) {
+                    // Add to existing selection if modifier key is pressed
+                    this.canvasManager.selectElements(shapesInRect, false);
+                    
+                    // Update selectedShapes array
+                    shapesInRect.forEach(shape => {
+                        if (!this.selectedShapes.some(s => s.id === shape.id)) {
+                            this.selectedShapes.push(shape);
+                        }
+                    });
+                } else {
+                    // Replace selection if no modifier key
+                    this.canvasManager.deselectAll();
+                    this.selectedShapes = [...shapesInRect];
+                    this.canvasManager.selectElements(shapesInRect);
+                }
                 
-                // Show properties for the selected shape
-                if (this.propertiesPanel) {
+                // Update properties panel
+                if (this.selectedShapes.length === 1 && this.propertiesPanel) {
                     this.propertiesPanel.showProperties(this.selectedShapes[0]);
+                } else if (this.propertiesPanel) {
+                    this.propertiesPanel.hideProperties();
                 }
             }
             
@@ -327,19 +380,51 @@ class SelectTool extends BaseTool {
         
         // Move each selected shape
         const movedShapes = this.selectedShapes.map(shape => {
-            const clone = JSON.parse(JSON.stringify(shape));
+            let clone;
             
             if (shape.type === 'line') {
-                clone.x1 += dx;
-                clone.y1 += dy;
-                clone.x2 += dx;
-                clone.y2 += dy;
+                clone = new Line(
+                    shape.x1 + dx,
+                    shape.y1 + dy,
+                    shape.x2 + dx,
+                    shape.y2 + dy
+                );
+                clone.id = shape.id;
             } else if (shape.type === 'rectangle') {
-                clone.x += dx;
-                clone.y += dy;
-            } else if (shape.type === 'circle' || shape.type === 'arc') {
-                clone.cx += dx;
-                clone.cy += dy;
+                clone = new Rectangle(
+                    shape.x + dx,
+                    shape.y + dy,
+                    shape.width,
+                    shape.height
+                );
+                clone.id = shape.id;
+            } else if (shape.type === 'circle') {
+                clone = new Circle(
+                    shape.cx + dx,
+                    shape.cy + dy,
+                    shape.radius
+                );
+                clone.id = shape.id;
+            } else if (shape.type === 'arc') {
+                clone = new Arc(
+                    shape.cx + dx,
+                    shape.cy + dy,
+                    shape.radius,
+                    shape.startAngle,
+                    shape.endAngle
+                );
+                clone.id = shape.id;
+            } else {
+                // Fallback for unknown shape types
+                clone = { ...shape };
+                if (clone.x !== undefined) clone.x += dx;
+                if (clone.y !== undefined) clone.y += dy;
+                if (clone.cx !== undefined) clone.cx += dx;
+                if (clone.cy !== undefined) clone.cy += dy;
+                if (clone.x1 !== undefined) clone.x1 += dx;
+                if (clone.y1 !== undefined) clone.y1 += dy;
+                if (clone.x2 !== undefined) clone.x2 += dx;
+                if (clone.y2 !== undefined) clone.y2 += dy;
             }
             
             return clone;

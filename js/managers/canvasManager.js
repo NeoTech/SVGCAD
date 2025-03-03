@@ -451,20 +451,27 @@ class CanvasManager {
     /**
      * Select elements
      * @param {Array|Object} elements - The element(s) to select
+     * @param {boolean} [clearExisting=true] - Whether to clear existing selection
      */
-    selectElements(elements) {
+    selectElements(elements, clearExisting = true) {
         if (!elements) return;
         
-        // Clear current selection first
-        this.selectedElements = [];
+        // Clear current selection if requested
+        if (clearExisting) {
+            this.selectedElements = [];
+        }
         
         // Convert to array if not already
         const elementsArray = Array.isArray(elements) ? elements : [elements];
         
-        // Only select the first element in the array
-        if (elementsArray.length > 0) {
-            this.selectedElements.push(elementsArray[0]);
-        }
+        // Add all elements to selection, avoiding duplicates
+        elementsArray.forEach(element => {
+            // Check if element is already selected
+            const isAlreadySelected = this.selectedElements.some(e => e.id === element.id);
+            if (!isAlreadySelected) {
+                this.selectedElements.push(element);
+            }
+        });
         
         this.renderSelection();
         
