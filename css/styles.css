@@ -338,12 +338,6 @@ body {
     stroke-width: 1;
 }
 
-#shapes-group path, #shapes-group line, #shapes-group rect, #shapes-group circle {
-    stroke: #2c3e50;
-    stroke-width: 2;
-    fill: none;
-}
-
 #preview-group path, #preview-group line, #preview-group rect, #preview-group circle {
     stroke: #3498db;
     stroke-width: 2;

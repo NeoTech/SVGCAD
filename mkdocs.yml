@@ -1,0 +1,49 @@
+site_name: CAD Editor Documentation
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - search.highlight
+
+markdown_extensions:
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_div_format
+  - pymdownx.tabbed
+  - pymdownx.details
+  - admonition
+
+nav:
+  - Home: index.md
+  - Architecture:
+    - Overview: architecture/overview.md
+    - Class Diagram: architecture/class-diagram.md
+    - Flow Diagrams: architecture/flow-diagrams.md
+  - API Reference:
+    - Models:
+      - Point: api/models/point.md
+      - Line: api/models/line.md
+      - Circle: api/models/circle.md
+      - Arc: api/models/arc.md
+      - Rectangle: api/models/rectangle.md
+    - Tools:
+      - Base Tool: api/tools/base-tool.md
+      - Select Tool: api/tools/select-tool.md
+      - Line Tool: api/tools/line-tool.md
+      - Circle Tool: api/tools/circle-tool.md
+      - Arc Tool: api/tools/arc-tool.md
+      - Rectangle Tool: api/tools/rectangle-tool.md
+    - Managers:
+      - App State Manager: api/managers/app-state-manager.md
+      - Canvas Manager: api/managers/canvas-manager.md
+      - Constraint Manager: api/managers/constraint-manager.md
+    - Utils:
+      - Math Utils: api/utils/math-utils.md
+      - Logger: api/utils/logger.md
+      - Properties Panel: api/utils/properties-panel.md
+      - Dimension Input: api/utils/dimension-input.md 
