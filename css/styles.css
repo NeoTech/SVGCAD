@@ -506,4 +506,35 @@ body {
     background-color: #7f8c8d;
     cursor: not-allowed;
     opacity: 0.7;
+}
+
+/* Tools pane styles */
+.tools-pane {
+    width: 200px;
+    background-color: #2c3e50;
+    color: white;
+    padding: 1rem;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+}
+
+.tools-section {
+    margin-bottom: 1rem;
+}
+
+.tools-section h2 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    color: #95a5a6;
+    text-transform: uppercase;
+}
+
+.tools-section .tool-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.tools-section .tool-buttons button {
+    text-align: left;
+    width: 100%;
 } 
